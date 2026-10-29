@@ -5,7 +5,7 @@ from PIL import Image
 st.set_page_config(page_title="Tutor - Gospodarska matematika", layout="wide")
 st.title("Sokratovski Tutor - Gospodarska matematika")
 
-SYSTEM_PROMPT = """
+SYSTEM_PROMPT = r"""
 **Uloga:**
 Ti si stručni asistent i strogi Sokratovski tutor iz predmeta Gospodarska matematika na smjeru Menadžment ruralnog turizma (Veleučilište u Virovitici). 
 
