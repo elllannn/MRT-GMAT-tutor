@@ -2,6 +2,7 @@ import streamlit as st
 from google import genai
 from google.genai import types
 from PIL import Image
+import time
 
 st.set_page_config(page_title="Tutor - Gospodarska matematika", layout="wide")
 st.title("Sokratovski Tutor - Gospodarska matematika")
@@ -216,14 +217,33 @@ if prompt := st.chat_input("Unesi svoju poruku ili pitanje ovdje..."):
     if uploaded_file:
         content.append(Image.open(uploaded_file))
 
-    # Slanje modelu i primanje odgovora
+    # Slanje modelu i primanje odgovora uz "štit" (Exponential Backoff)
     with st.chat_message("assistant"):
-        try:
-            response = st.session_state.chat.send_message(content)
-            st.markdown(response.text)
-            st.session_state.history_ui.append({"role": "assistant", "content": response.text})
-            
-            if "IZVJEŠTAJ O VJEŽBAMA IZ MATEMATIKE" in response.text:
-                st.success("Tvoj izvještaj je generiran i bit će proslijeđen asistentu!")
-        except Exception as e:
-            st.error(f"Došlo je do greške u komunikaciji s modelom: {e}")
+        max_retries = 3
+        retry_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                response = st.session_state.chat.send_message(content)
+                st.markdown(response.text)
+                st.session_state.history_ui.append({"role": "assistant", "content": response.text})
+                
+                if "IZVJEŠTAJ O VJEŽBAMA IZ MATEMATIKE" in response.text:
+                    st.success("Tvoj izveštaj je generisan i biće prosleđen asistentu!")
+                break  # Uspešno poslato, izlazimo iz petlje
+                
+            except Exception as e:
+                error_msg = str(e)
+                # Proveravamo da li je greška vezana za preopterećenje (503 ili 429)
+                if "503" in error_msg or "429" in error_msg:
+                    if attempt < max_retries - 1:
+                        warning = st.warning(f"Server je trenutno opterećen (pokušaj {attempt + 1}/{max_retries}). Ponovni pokušaj za {retry_delay} sekunde...")
+                        time.sleep(retry_delay)
+                        warning.empty()  # Brišemo upozorenje pre novog pokušaja
+                        retry_delay *= 2  # Povećavamo vreme čekanja (eksponencijalni rast)
+                    else:
+                        st.error("Server je i dalje preopterećen nakon više pokušaja. Molim te, pokušaj ponovo za par minuta.")
+                else:
+                    # Za sve ostale, neočekivane greške, odmah prekidamo i ispisujemo
+                    st.error(f"Došlo je do greške u komunikaciji s modelom: {error_msg}")
+                    break
