@@ -1,10 +1,12 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from PIL import Image
 
 st.set_page_config(page_title="Tutor - Gospodarska matematika", layout="wide")
 st.title("Sokratovski Tutor - Gospodarska matematika")
 
+# Dodano 'r' ispred navodnika kako bi Python ispravno čitao LaTeX znakove
 SYSTEM_PROMPT = r"""
 **Uloga:**
 Ti si stručni asistent i strogi Sokratovski tutor iz predmeta Gospodarska matematika na smjeru Menadžment ruralnog turizma (Veleučilište u Virovitici). 
@@ -179,37 +181,46 @@ if not api_key:
     st.warning("API ključ nije postavljen. Molimo unesite vlastiti ključ u bočnu traku.")
     st.stop()
 
-genai.configure(api_key=api_key)
+# Inicijalizacija novog klijenta
+client = genai.Client(api_key=api_key)
 
-if "chat_session" not in st.session_state:
-    model = genai.GenerativeModel(
-        model_name="gemini-3.8-flash",
-        system_instruction=SYSTEM_PROMPT
+# Inicijalizacija chata po novom SDK standardu
+if "chat" not in st.session_state:
+    st.session_state.chat = client.chats.create(
+        model="gemini-3.8-flash",
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT
+        )
     )
-    st.session_state.chat_session = model.start_chat(history=[])
+    st.session_state.history_ui = []
 
-for message in st.session_state.chat_session.history:
-    role = "assistant" if message.role == "model" else "user"
-    with st.chat_message(role):
-        for part in message.parts:
-            if hasattr(part, 'text') and part.text:
-                st.markdown(part.text)
+# Prikaz prijašnjih poruka
+for msg in st.session_state.history_ui:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
+# Obrada novog unosa
 if prompt := st.chat_input("Unesi svoju poruku ili pitanje ovdje..."):
+    # Prikaz na ekranu
     with st.chat_message("user"):
         st.markdown(prompt)
         if uploaded_file:
             st.image(uploaded_file, caption="Učitani postupak", use_column_width=True)
+            
+    # Spremanje u UI memoriju
+    st.session_state.history_ui.append({"role": "user", "content": prompt})
 
+    # Priprema podataka za API
     content = [prompt]
     if uploaded_file:
-        image = Image.open(uploaded_file)
-        content.append(image)
+        content.append(Image.open(uploaded_file))
 
+    # Slanje modelu i primanje odgovora
     with st.chat_message("assistant"):
         try:
-            response = st.session_state.chat_session.send_message(content)
+            response = st.session_state.chat.send_message(content)
             st.markdown(response.text)
+            st.session_state.history_ui.append({"role": "assistant", "content": response.text})
             
             if "IZVJEŠTAJ O VJEŽBAMA IZ MATEMATIKE" in response.text:
                 st.success("Tvoj izvještaj je generiran i bit će proslijeđen asistentu!")
