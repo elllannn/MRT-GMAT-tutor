@@ -181,12 +181,13 @@ if not api_key:
     st.warning("API ključ nije postavljen. Molimo unesite vlastiti ključ u bočnu traku.")
     st.stop()
 
-# Inicijalizacija novog klijenta
-client = genai.Client(api_key=api_key)
+# Spremamo klijenta u memoriju da se ne gasi između poruka
+if "client" not in st.session_state:
+    st.session_state.client = genai.Client(api_key=api_key)
 
-# Inicijalizacija chata po novom SDK standardu
+# Inicijalizacija chata koristeći klijenta iz memorije
 if "chat" not in st.session_state:
-    st.session_state.chat = client.chats.create(
+    st.session_state.chat = st.session_state.client.chats.create(
         model="gemini-3.8-flash",
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT
